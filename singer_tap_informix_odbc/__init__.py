@@ -5,9 +5,10 @@ import singer
 from singer import utils, metadata
 from singer.catalog import Catalog, CatalogEntry
 from singer.schema import Schema
+import pyodbc
 
 
-REQUIRED_CONFIG_KEYS = ["start_date", "username", "password"]
+REQUIRED_CONFIG_KEYS = ["dsn"]
 LOGGER = singer.get_logger()
 
 
@@ -18,16 +19,17 @@ def get_abs_path(path):
 def load_schemas():
     """ Load schemas from schemas folder """
     schemas = {}
-    for filename in os.listdir(get_abs_path('schemas')):
-        path = get_abs_path('schemas') + '/' + filename
-        file_raw = filename.replace('.json', '')
+    for filename in os.listdir(get_abs_path("schemas")):
+        path = get_abs_path("schemas") + "/" + filename
+        file_raw = filename.replace(".json", "")
+        print(f"DBEUG: path = {path}")  # DEBUG
         with open(path) as file:
             schemas[file_raw] = Schema.from_dict(json.load(file))
     return schemas
 
 
-def discover():
-    raw_schemas = load_schemas()
+def discover(config):
+    conn = pyodbc.connect(config["dsn"])
     streams = []
     for stream_id, schema in raw_schemas.items():
         # TODO: populate any metadata and stream's key properties here..
@@ -59,7 +61,9 @@ def sync(config, state, catalog):
         LOGGER.info("Syncing stream:" + stream.tap_stream_id)
 
         bookmark_column = stream.replication_key
-        is_sorted = True  # TODO: indicate whether data is sorted ascending on bookmark value
+        is_sorted = (
+            True  # TODO: indicate whether data is sorted ascending on bookmark value
+        )
 
         singer.write_schema(
             stream_name=stream.tap_stream_id,
@@ -95,7 +99,7 @@ def main():
 
     # If discover flag was passed, run discovery mode and dump output to stdout
     if args.discover:
-        catalog = discover()
+        catalog = discover(args.config)
         catalog.dump()
     # Otherwise run in sync mode
     else:
